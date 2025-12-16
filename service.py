@@ -5,20 +5,20 @@ from fastapi import HTTPException
 
 class OrganizationService:
     
-    # 1. Create Organization Logic [cite: 67-82]
+   # 1. Create Organization Logic
     async def create_organization(self, data: OrgCreateRequest):
         # Check if org exists
         existing = await master_db.organizations.find_one({"organization_name": data.organization_name})
         if existing:
             raise HTTPException(status_code=400, detail="Organization name already exists")
 
-        # Dynamic Collection Name [cite: 75]
+        # Dynamic Collection Name
         collection_name = f"org_{data.organization_name}"
         
-        # Hash Password [cite: 128]
+        # Hash Password
         hashed_password = AuthService.get_password_hash(data.password)
 
-        # Prepare Metadata for Master DB [cite: 77-81]
+        # Prepare Metadata for Master DB
         org_metadata = {
             "organization_name": data.organization_name,
             "collection_name": collection_name,
@@ -26,10 +26,14 @@ class OrganizationService:
             "admin_password": hashed_password
         }
 
-        # Save to Master DB
-        await master_db.organizations.insert_one(org_metadata)
+        # Save to Master DB (MongoDB adds the '_id' here)
+        result = await master_db.organizations.insert_one(org_metadata)
 
-        # DYNAMIC COLLECTION CREATION [cite: 74, 124]
+        # --- FIX: Convert the ObjectId to a string so FastAPI can read it ---
+        org_metadata["_id"] = str(result.inserted_id)
+        # -------------------------------------------------------------------
+
+        # DYNAMIC COLLECTION CREATION
         # MongoDB creates collections lazily. We insert the admin user to "create" it.
         org_db = client[collection_name] # Access dynamic database/collection
         await org_db.users.insert_one({
@@ -39,7 +43,6 @@ class OrganizationService:
         })
 
         return {"message": "Organization created successfully", "details": org_metadata}
-
     # 2. Get Organization Logic [cite: 83-89]
     async def get_organization(self, name: str):
         org = await master_db.organizations.find_one({"organization_name": name})

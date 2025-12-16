@@ -3,8 +3,12 @@ from jose import jwt
 from datetime import datetime, timedelta
 import os
 
-# Setup for password hashing
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# --- FIX: Added 'truncate_error=False' to prevent the 72 bytes crash ---
+pwd_context = CryptContext(
+    schemes=["bcrypt"], 
+    deprecated="auto",
+    bcrypt__truncate_error=False  # <--- THIS IS THE FIX
+)
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM")
@@ -21,7 +25,6 @@ class AuthService:
     @staticmethod
     def create_access_token(data: dict):
         to_encode = data.copy()
-        # Token expires in 30 minutes
         expire = datetime.utcnow() + timedelta(minutes=30)
         to_encode.update({"exp": expire})
         encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)

@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TenantSync | SaaS Dashboard</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; max-width: 900px; margin: 0 auto; padding: 40px; background-color: #f0f2f5; color: #1c1e21; }
+        .header { text-align: center; margin-bottom: 40px; }
+        .header h1 { color: #2563eb; margin: 0; }
+        .card { background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        
+        /* Navigation Tabs */
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; }
+        .tab-btn { background: none; border: none; padding: 10px 20px; cursor: pointer; font-weight: 600; color: #6b7280; font-size: 16px; }
+        .tab-btn.active { color: #2563eb; border-bottom: 3px solid #2563eb; }
+
+        /* Forms */
+        input { width: 100%; padding: 12px; margin: 8px 0 20px; border: 1px solid #d1d5db; border-radius: 6px; box-sizing: border-box; }
+        label { font-weight: 600; font-size: 14px; color: #374151; }
+        
+        /* Buttons */
+        .btn { width: 100%; padding: 12px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; transition: 0.2s; }
+        .btn-primary { background-color: #2563eb; color: white; }
+        .btn-primary:hover { background-color: #1d4ed8; }
+        .btn-danger { background-color: #ef4444; color: white; margin-top: 10px; }
+        .btn-danger:hover { background-color: #dc2626; }
+
+        /* Output Area */
+        .dashboard-view { display: none; background: #eff6ff; border: 1px solid #bfdbfe; padding: 20px; border-radius: 8px; }
+        .data-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #dbeafe; }
+        .tag { background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+        .status-msg { margin-top: 15px; padding: 10px; border-radius: 6px; display: none; text-align: center; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>TenantSync 🚀</h1>
+        <p>Multi-Tenant SaaS Management Portal</p>
+    </div>
+
+    <div class="card">
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('register')">Register Org</button>
+            <button class="tab-btn" onclick="switchTab('login')">Admin Login</button>
+            <button class="tab-btn" onclick="switchTab('dashboard')">Dashboard (Search)</button>
+        </div>
+
+        <div id="register-section">
+            <label>Organization Name</label>
+            <input type="text" id="regName" placeholder="e.g. SpaceX">
+            <label>Admin Email</label>
+            <input type="email" id="regEmail" placeholder="admin@spacex.com">
+            <label>Password</label>
+            <input type="password" id="regPass" placeholder="••••••••">
+            <button class="btn btn-primary" onclick="handleRegister()">Create Organization</button>
+        </div>
+
+        <div id="login-section" style="display:none;">
+            <label>Admin Email</label>
+            <input type="email" id="loginEmail">
+            <label>Password</label>
+            <input type="password" id="loginPass">
+            <button class="btn btn-primary" onclick="handleLogin()">Log In</button>
+        </div>
+
+        <div id="dashboard-section" style="display:none;">
+            <label>Search Organization</label>
+            <div style="display:flex; gap:10px;">
+                <input type="text" id="searchName" placeholder="Enter Org Name to View" style="margin-bottom:0;">
+                <button class="btn btn-primary" style="width: 30%; margin-bottom:0;" onclick="handleSearch()">Search</button>
+            </div>
+            <br>
+            
+            <div id="org-details" class="dashboard-view">
+                <h3 style="margin-top:0;">Organization Details</h3>
+                <div class="data-row">
+                    <span>Name:</span>
+                    <strong id="dispName">--</strong>
+                </div>
+                <div class="data-row">
+                    <span>Admin Email:</span>
+                    <span id="dispEmail">--</span>
+                </div>
+                <div class="data-row">
+                    <span>Database Collection:</span>
+                    <span class="tag" id="dispColl">--</span>
+                </div>
+                <div class="data-row">
+                    <span>System ID:</span>
+                    <span id="dispId" style="font-family:monospace; font-size:12px;">--</span>
+                </div>
+
+                <button class="btn btn-danger" onclick="handleDelete()">Delete Organization</button>
+            </div>
+        </div>
+
+        <div id="status" class="status-msg"></div>
+    </div>
+
+    <script>
+        const API_URL = "http://127.0.0.1:8000";
+
+        function switchTab(tab) {
+            ['register', 'login', 'dashboard'].forEach(t => {
+                document.getElementById(`${t}-section`).style.display = (t === tab) ? 'block' : 'none';
+            });
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            event.target.classList.add('active');
+            hideStatus();
+        }
+
+        // 1. Register Logic
+        async function handleRegister() {
+            const payload = {
+                organization_name: document.getElementById('regName').value,
+                email: document.getElementById('regEmail').value,
+                password: document.getElementById('regPass').value
+            };
+            sendRequest('/org/create', 'POST', payload, "✅ Organization Created Successfully!");
+        }
+
+        // 2. Login Logic
+        async function handleLogin() {
+            const payload = {
+                email: document.getElementById('loginEmail').value,
+                password: document.getElementById('loginPass').value
+            };
+            const data = await sendRequest('/admin/login', 'POST', payload);
+            if(data) {
+                showStatus("✅ Login Verified! (Token Received)", "#d1fae5", "#065f46");
+                // Auto-switch to dashboard
+                setTimeout(() => document.querySelectorAll('.tab-btn')[2].click(), 1000);
+            }
+        }
+
+        // 3. Search Logic (The "Read" Part)
+        async function handleSearch() {
+            const name = document.getElementById('searchName').value;
+            if(!name) return showStatus("❌ Enter a name first", "#fee2e2", "#991b1b");
+
+            try {
+                const res = await fetch(`${API_URL}/org/get/${name}`);
+                const data = await res.json();
+
+                if (res.ok) {
+                    document.getElementById('org-details').style.display = 'block';
+                    document.getElementById('dispName').innerText = data.organization_name;
+                    document.getElementById('dispEmail').innerText = data.admin_email;
+                    document.getElementById('dispColl').innerText = data.collection_name; // PROOF OF CONCEPT
+                    document.getElementById('dispId').innerText = data._id;
+                    hideStatus();
+                } else {
+                    document.getElementById('org-details').style.display = 'none';
+                    showStatus("❌ " + data.detail, "#fee2e2", "#991b1b");
+                }
+            } catch (err) { showStatus("❌ Connection Error", "#fee2e2", "#991b1b"); }
+        }
+
+        // 4. Delete Logic (The "Delete" Part)
+        async function handleDelete() {
+            const name = document.getElementById('dispName').innerText;
+            if(confirm(`Are you sure you want to delete ${name}? This will wipe their database collection.`)) {
+                try {
+                    const res = await fetch(`${API_URL}/org/delete/${name}`, { method: 'DELETE' });
+                    const data = await res.json();
+                    if(res.ok) {
+                        document.getElementById('org-details').style.display = 'none';
+                        showStatus("🗑️ " + data.message, "#d1fae5", "#065f46");
+                        document.getElementById('searchName').value = "";
+                    } else {
+                        showStatus("❌ Error deleting", "#fee2e2", "#991b1b");
+                    }
+                } catch(err) { console.error(err); }
+            }
+        }
+
+        // Helper functions
+        async function sendRequest(endpoint, method, body, successMsg) {
+            try {
+                const res = await fetch(API_URL + endpoint, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    if(successMsg) showStatus(successMsg, "#d1fae5", "#065f46");
+                    return data;
+                } else {
+                    showStatus("❌ " + (data.detail || "Error"), "#fee2e2", "#991b1b");
+                    return null;
+                }
+            } catch (err) {
+                showStatus("❌ Server Connection Failed", "#fee2e2", "#991b1b");
+                return null;
+            }
+        }
+
+        function showStatus(msg, bg, color) {
+            const el = document.getElementById('status');
+            el.innerHTML = msg;
+            el.style.display = 'block';
+            el.style.backgroundColor = bg;
+            el.style.color = color;
+        }
+        function hideStatus() { document.getElementById('status').style.display = 'none'; }
+    </script>
+</body>
+</html>
